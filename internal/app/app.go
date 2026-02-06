@@ -30,7 +30,7 @@ func RunServer() {
 		return
 	}
 
-	 hexSecret := cfg.Security.EncryptionSecret
+	hexSecret := cfg.Security.EncryptionSecret
 
 	encryptor, err := security.NewEncryptor(hexSecret)
 	if err != nil {
@@ -59,7 +59,8 @@ func RunServer() {
 	e.Validator = customValidator
 
 	paymentHandler := handler.NewPaymentHandler(paymentService)
-	webhookHandler := handler.NewMidtransWebhookHandler(transactionService)
+	webhookHandler := handler.NewMidtransWebhookHandler(transactionService, merchantRepository)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
 
 	// // seed
 	// seeds.SeedMerchants(db.DB)
@@ -68,6 +69,7 @@ func RunServer() {
 		e,
 		paymentHandler,
 		webhookHandler,
+		transactionHandler,
 	)
 
 	go func() {

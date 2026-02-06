@@ -23,7 +23,7 @@ type merchantRepository struct {
 
 // Create implements [MerchantRepositoryInterface].
 func (m *merchantRepository) Create(id, name, env string) (*model.MerchantModel, error) {
-	
+
 	query := `
 		INSERT INTO merchants (id, name, key_environment)
 		VALUES ($1, $2, $3)

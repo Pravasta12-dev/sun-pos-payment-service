@@ -10,13 +10,14 @@ func RegisterRoutes(
 	e *echo.Echo,
 	paymentHandler handler.PaymentHandlerInterface,
 	webhookHandler handler.MitransWebhookHandlerInterface,
+	transactionHandler handler.TransactionHandlerInterface,
 ) {
 	api := e.Group("/api")
 	payment := api.Group("/payment")
 
 	payment.POST("/generate-qris", paymentHandler.GenerateQris)
 	payment.POST("/webhook", webhookHandler.HandleWebhook)
-
+	payment.GET("/transaction/:order_id", transactionHandler.GetByOrderID)
 
 	e.GET("/ping", func(c echo.Context) error {
 		return c.String(200, "pong")

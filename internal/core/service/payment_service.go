@@ -17,7 +17,7 @@ type PaymentServiceInterface interface {
 type paymentService struct {
 	midtransClient     payment.MidtransClientInterface
 	transactionService TransactionServiceInterface
-	merchantRepository  repository.MerchantRepositoryInterface
+	merchantRepository repository.MerchantRepositoryInterface
 }
 
 // GenerateQRIS implements [PaymentServiceInterface].
@@ -35,11 +35,11 @@ func (p *paymentService) GenerateQRIS(
 	}
 
 	merchant, err := p.merchantRepository.FindByID(input.MerchantID)
-	
+
 	if err != nil {
 		if err.Error() == "404" {
 			log.Errorf("[Payment Service-2] merchant not found: %v", err)
-			merchant , err = p.merchantRepository.Create(
+			merchant, err = p.merchantRepository.Create(
 				input.MerchantID,
 				input.Acquirer,
 				"sandbox",
@@ -48,7 +48,17 @@ func (p *paymentService) GenerateQRIS(
 			if err != nil {
 				log.Errorf("[Payment Service-2] failed to create merchant: %v", err)
 				return nil, err
-			}	
+			}
+
+			if merchant.ServerKey == "" && input.ServerKey != "" {
+				err = p.merchantRepository.SaveServerKey(merchant.ID, input.ServerKey)
+				if err != nil {
+					log.Errorf("[Payment Service-2] failed to save server key: %v", err)
+					return nil, err
+				}
+				// Update merchant model with the server key
+				merchant.ServerKey = input.ServerKey
+			}
 		} else {
 			log.Errorf("[Payment Service-2] failed to find merchant: %v", err)
 			return nil, err
@@ -61,7 +71,7 @@ func (p *paymentService) GenerateQRIS(
 	}
 
 	mtRes, err := p.midtransClient.ChargeQris(
-		input.ServerKey,
+		merchant.ServerKey,
 		payment.QrisChargeInput{
 			OrderID:  input.OrderID,
 			Amount:   input.Amount,
@@ -111,6 +121,6 @@ func NewPaymentService(
 	return &paymentService{
 		midtransClient:     midtransClient,
 		transactionService: transactionService,
-		merchantRepository:  merchantRepository,
+		merchantRepository: merchantRepository,
 	}
 }
