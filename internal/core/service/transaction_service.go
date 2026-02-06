@@ -10,7 +10,7 @@ import (
 
 type TransactionServiceInterface interface {
 	CreateTransaction(
-		merchantID int64,
+		merchantID string,
 		orderID string,
 		amount float64,
 		paymentType string,
@@ -30,7 +30,7 @@ type transactionService struct {
 }
 
 // CreateTransaction implements [TransactionServiceInterface].
-func (t *transactionService) CreateTransaction(merchantID int64, orderID string, amount float64, paymentType string, expiredAt *time.Time) (*model.TransactionModel, error) {
+func (t *transactionService) CreateTransaction(merchantID string, orderID string, amount float64, paymentType string, expiredAt *time.Time) (*model.TransactionModel, error) {
 	return t.transactionRepo.CreateTransaction(
 		merchantID,
 		orderID,

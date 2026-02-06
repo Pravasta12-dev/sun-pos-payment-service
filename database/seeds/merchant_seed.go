@@ -39,7 +39,7 @@ func SeedMerchants(db *gorm.DB) error {
 	}
 
 	for _, m := range merchants {
-		_, err := merchantRepo.Create(m.Name, m.KeyEnvironment)
+		_, err := merchantRepo.Create( "", m.Name, m.KeyEnvironment)
 		if err != nil {
 			return err
 		}

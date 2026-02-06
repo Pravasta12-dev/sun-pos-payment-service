@@ -3,7 +3,7 @@ package service
 import "time"
 
 type GenerateQRISInput struct {
-	MerchantID    int64
+	MerchantID    string
 	ServerKey     string
 	OrderID       string
 	Amount        float64

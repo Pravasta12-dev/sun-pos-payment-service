@@ -1,7 +1,7 @@
 package model
 
 type MerchantModel struct {
-	ID             int64
+	ID             string
 	Name           string
 	ServerKey      string
 	KeyEnvironment string

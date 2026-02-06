@@ -4,7 +4,7 @@ import "time"
 
 type TransactionModel struct {
 	ID          int64
-	MerchantID  int64
+	MerchantID  string
 	OrderID     string
 	Amount      float64
 	PaymentType string

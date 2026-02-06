@@ -11,9 +11,9 @@ import (
 )
 
 type MerchantRepositoryInterface interface {
-	Create(name, env string) (*model.MerchantModel, error)
-	SaveServerKey(merchantID int64, serverKey string) error
-	FindByID(merchantID int64) (*model.MerchantModel, error)
+	Create(id, name, env string) (*model.MerchantModel, error)
+	SaveServerKey(merchantID string, serverKey string) error
+	FindByID(merchantID string) (*model.MerchantModel, error)
 }
 
 type merchantRepository struct {
@@ -22,35 +22,36 @@ type merchantRepository struct {
 }
 
 // Create implements [MerchantRepositoryInterface].
-func (m *merchantRepository) Create(name, env string) (*model.MerchantModel, error) {
+func (m *merchantRepository) Create(id, name, env string) (*model.MerchantModel, error) {
+	
 	query := `
-		INSERT INTO merchants (name, key_environment)
-		VALUES ($1, $2)
+		INSERT INTO merchants (id, name, key_environment)
+		VALUES ($1, $2, $3)
 		RETURNING id
 	`
 
 	var e entity.MerchantEntity
 
-	err := m.db.Raw(query, name, env).Scan(&e).Error
+	err := m.db.Raw(query, id, name, env).Scan(&e).Error
 	if err != nil {
 		log.Errorf("[Merchant Repository-1] failed to create merchant: %v", err)
 		return nil, err
 	}
-
+	e.ID = id
 	e.Name = name
-	e.KeyEnvirontment = env
+	e.KeyEnvironment = env
 
 	merchantModel := &model.MerchantModel{
 		ID:             e.ID,
 		Name:           e.Name,
-		KeyEnvironment: e.KeyEnvirontment,
+		KeyEnvironment: e.KeyEnvironment,
 	}
 
 	return merchantModel, nil
 }
 
 // FindByID implements [MerchantRepositoryInterface].
-func (m *merchantRepository) FindByID(merchantID int64) (*model.MerchantModel, error) {
+func (m *merchantRepository) FindByID(merchantID string) (*model.MerchantModel, error) {
 
 	var e entity.MerchantEntity
 
@@ -68,7 +69,7 @@ func (m *merchantRepository) FindByID(merchantID int64) (*model.MerchantModel, e
 	merchantModel := model.MerchantModel{
 		ID:             e.ID,
 		Name:           e.Name,
-		KeyEnvironment: e.KeyEnvirontment,
+		KeyEnvironment: e.KeyEnvironment,
 	}
 
 	// Decrypt server key if exists
@@ -85,7 +86,7 @@ func (m *merchantRepository) FindByID(merchantID int64) (*model.MerchantModel, e
 }
 
 // SaveServerKey implements [MerchantRepositoryInterface].
-func (m *merchantRepository) SaveServerKey(merchantID int64, serverKey string) error {
+func (m *merchantRepository) SaveServerKey(merchantID string, serverKey string) error {
 	encryptedKey, err := m.encryptor.Encrypt(serverKey)
 	if err != nil {
 		log.Errorf("[Merchant Repository-4] failed to encrypt server key: %v", err)

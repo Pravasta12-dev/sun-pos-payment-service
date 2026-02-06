@@ -6,12 +6,12 @@ import (
 	"os"
 	"os/signal"
 	"sun-pos-payment-service/config"
-	"sun-pos-payment-service/database/seeds"
 	"sun-pos-payment-service/internal/adapter/handler"
 	"sun-pos-payment-service/internal/adapter/payment"
 	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/service"
 	"sun-pos-payment-service/internal/routes"
+	"sun-pos-payment-service/internal/security"
 	"sun-pos-payment-service/utils/validator"
 	"syscall"
 	"time"
@@ -30,13 +30,23 @@ func RunServer() {
 		return
 	}
 
+	 hexSecret := cfg.Security.EncryptionSecret
+
+	encryptor, err := security.NewEncryptor(hexSecret)
+	if err != nil {
+		log.Fatalf("[Run Server - 1] Failed to create encryptor %v", err)
+		return
+	}
+
 	transactionRepository := repository.NewTransactionRepository(db.DB)
+	merchantRepository := repository.NewMerchantRepository(db.DB, encryptor)
 
 	transactionService := service.NewTransactionService(transactionRepository)
 	midtransClient := payment.NewMidtransClient(cfg.Midtrans.BaseURL)
 	paymentService := service.NewPaymentService(
 		midtransClient,
 		transactionService,
+		merchantRepository,
 	)
 
 	e := echo.New()
@@ -49,13 +59,15 @@ func RunServer() {
 	e.Validator = customValidator
 
 	paymentHandler := handler.NewPaymentHandler(paymentService)
+	webhookHandler := handler.NewMidtransWebhookHandler(transactionService)
 
-	// seed
-	seeds.SeedMerchants(db.DB)
+	// // seed
+	// seeds.SeedMerchants(db.DB)
 
 	routes.RegisterRoutes(
 		e,
 		paymentHandler,
+		webhookHandler,
 	)
 
 	go func() {

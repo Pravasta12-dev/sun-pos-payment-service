@@ -12,7 +12,7 @@ import (
 
 type TransactionRepositoryInterface interface {
 	CreateTransaction(
-		merchantID int64,
+		merchantID string,
 		orderID string,
 		amount float64,
 		paymentType string,
@@ -32,7 +32,7 @@ type transactionRepository struct {
 
 // CreateTransaction implements [TransactionRepositoryInterface].
 func (t *transactionRepository) CreateTransaction(
-	merchantID int64,
+	merchantID string,
 	orderID string,
 	amount float64,
 	paymentType string,

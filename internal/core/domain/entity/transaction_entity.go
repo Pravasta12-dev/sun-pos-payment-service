@@ -4,7 +4,7 @@ import "time"
 
 type TransactionEntity struct {
 	ID          int64      `db:"id"`
-	MerchantID  int64      `db:"merchant_id"`
+	MerchantID  string      `db:"merchant_id"`
 	OrderID     string     `db:"order_id"`
 	Amount      float64    `db:"amount"`
 	PaymentType string     `db:"payment_type"`

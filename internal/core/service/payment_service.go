@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/domain/model"
 	"sun-pos-payment-service/internal/core/domain/payment"
 	"time"
@@ -16,6 +17,7 @@ type PaymentServiceInterface interface {
 type paymentService struct {
 	midtransClient     payment.MidtransClientInterface
 	transactionService TransactionServiceInterface
+	merchantRepository  repository.MerchantRepositoryInterface
 }
 
 // GenerateQRIS implements [PaymentServiceInterface].
@@ -30,6 +32,27 @@ func (p *paymentService) GenerateQRIS(
 	if input.OrderID == "" || input.Amount <= 0 {
 		log.Errorf("[Payment Service-2] invalid order ID or amount")
 		return nil, errors.New("invalid order ID or amount")
+	}
+
+	merchant, err := p.merchantRepository.FindByID(input.MerchantID)
+	
+	if err != nil {
+		if err.Error() == "404" {
+			log.Errorf("[Payment Service-2] merchant not found: %v", err)
+			merchant , err = p.merchantRepository.Create(
+				input.MerchantID,
+				input.Acquirer,
+				"sandbox",
+			)
+
+			if err != nil {
+				log.Errorf("[Payment Service-2] failed to create merchant: %v", err)
+				return nil, err
+			}	
+		} else {
+			log.Errorf("[Payment Service-2] failed to find merchant: %v", err)
+			return nil, err
+		}
 	}
 
 	expMinutes := input.ExpireMinutes
@@ -58,7 +81,7 @@ func (p *paymentService) GenerateQRIS(
 	}
 
 	_, err = p.transactionService.CreateTransaction(
-		input.MerchantID,
+		merchant.ID,
 		input.OrderID,
 		input.Amount,
 		model.PaymentTypeQRIS,
@@ -83,9 +106,11 @@ func (p *paymentService) GenerateQRIS(
 func NewPaymentService(
 	midtransClient payment.MidtransClientInterface,
 	transactionService TransactionServiceInterface,
+	merchantRepository repository.MerchantRepositoryInterface,
 ) PaymentServiceInterface {
 	return &paymentService{
 		midtransClient:     midtransClient,
 		transactionService: transactionService,
+		merchantRepository:  merchantRepository,
 	}
 }
