@@ -45,7 +45,7 @@ func RunServer() {
 	midtransClient := payment.NewMidtransClient(cfg.Midtrans.BaseURL)
 	paymentService := service.NewPaymentService(
 		midtransClient,
-		transactionService,
+		transactionRepository,
 		merchantRepository,
 	)
 

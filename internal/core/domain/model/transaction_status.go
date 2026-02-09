@@ -1,8 +1,8 @@
 package model
 
 const (
-	TransactionStatusPending = "PENDING"
-	TransactionStatusPaid    = "PAID"
-	TransactionStatusExpired = "EXPIRED"
-	TransactionStatusFailed  = "FAILED"
+	TransactionStatusPending = "pending"
+	TransactionStatusPaid    = "paid"
+	TransactionStatusExpired = "expired"
+	TransactionStatusFailed  = "failed"
 )

@@ -27,10 +27,17 @@ func (p *paymentHandler) GenerateQris(c echo.Context) error {
 	)
 
 	if err := c.Bind(&req); err != nil {
-
 		log.Errorf("[Payment Handler-1] failed to bind request: %v", err)
 		return c.JSON(http.StatusBadRequest, response.DefaultResponse{
 			Message: "invalid request payload",
+			Data:    nil,
+		})
+	}
+
+	if err := c.Validate(&req); err != nil {
+		log.Errorf("[Payment Handler-4] validation failed: %v", err)
+		return c.JSON(http.StatusUnprocessableEntity, response.DefaultResponse{
+			Message: "validation failed: " + err.Error(),
 			Data:    nil,
 		})
 	}
@@ -39,7 +46,7 @@ func (p *paymentHandler) GenerateQris(c echo.Context) error {
 		service.GenerateQRISInput{
 			MerchantID: req.MerchantID,
 			ServerKey:  req.ServerKey,
-			OrderID:    req.OrderID,
+			BillID:     req.OrderID,
 			Amount:     req.Amount,
 			Acquirer:   req.Acquirer,
 		},
@@ -64,6 +71,7 @@ func (p *paymentHandler) GenerateQris(c echo.Context) error {
 	dataResponse = response.GenerateQrisResponse{
 		OrderID:   result.OrderID,
 		QrUrl:     result.QrURL,
+		BillID:    result.BillID,
 		ExpiredAt: result.ExpiredAt,
 		Status:    result.Status,
 	}

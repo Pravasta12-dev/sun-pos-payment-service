@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/domain/model"
 	"sun-pos-payment-service/internal/core/domain/payment"
@@ -16,7 +17,7 @@ type PaymentServiceInterface interface {
 
 type paymentService struct {
 	midtransClient     payment.MidtransClientInterface
-	transactionService TransactionServiceInterface
+	transactionRepo    repository.TransactionRepositoryInterface
 	merchantRepository repository.MerchantRepositoryInterface
 }
 
@@ -29,9 +30,9 @@ func (p *paymentService) GenerateQRIS(
 		return nil, errors.New("server key is required")
 	}
 
-	if input.OrderID == "" || input.Amount <= 0 {
-		log.Errorf("[Payment Service-2] invalid order ID or amount")
-		return nil, errors.New("invalid order ID or amount")
+	if input.BillID == "" || input.Amount <= 0 {
+		log.Errorf("[Payment Service-2] invalid bill ID or amount")
+		return nil, errors.New("invalid bill ID or amount")
 	}
 
 	merchant, err := p.merchantRepository.FindByID(input.MerchantID)
@@ -65,6 +66,31 @@ func (p *paymentService) GenerateQRIS(
 		}
 	}
 
+	existingTransaction, err := p.transactionRepo.FindActivePendingTransaction(
+		merchant.ID,
+		input.BillID,
+		model.PaymentTypeQRIS,
+	)
+
+	if err == nil && existingTransaction != nil {
+		if existingTransaction.Amount == input.Amount {
+			log.Infof("[Payment Service-3] reusing existing pending transaction for bill ID: %s", existingTransaction.BillID)
+
+			return &GenerateQRISResult{
+				OrderID:   existingTransaction.OrderID,
+				QrURL:     *existingTransaction.QrURL,
+				ExpiredAt: existingTransaction.ExpiredAt,
+				Status:    existingTransaction.Status,
+				BillID:    existingTransaction.BillID,
+			}, nil
+		}
+
+		log.Infof("[Payment Service-3] existing pending transaction found with different amount, creating new transaction")
+		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, model.TransactionStatusFailed, nil)
+	}
+
+	paymentOrderID := fmt.Sprintf("QRIS-%s-%d", input.BillID, time.Now().UnixNano())
+
 	expMinutes := input.ExpireMinutes
 	if expMinutes <= 0 {
 		expMinutes = 15
@@ -73,7 +99,7 @@ func (p *paymentService) GenerateQRIS(
 	mtRes, err := p.midtransClient.ChargeQris(
 		merchant.ServerKey,
 		payment.QrisChargeInput{
-			OrderID:  input.OrderID,
+			OrderID:  paymentOrderID,
 			Amount:   input.Amount,
 			Acquirer: input.Acquirer,
 		},
@@ -90,11 +116,13 @@ func (p *paymentService) GenerateQRIS(
 		expiredAt = &t
 	}
 
-	_, err = p.transactionService.CreateTransaction(
+	_, err = p.transactionRepo.CreateTransaction(
 		merchant.ID,
-		input.OrderID,
+		input.BillID,
+		paymentOrderID,
 		input.Amount,
 		model.PaymentTypeQRIS,
+		mtRes.QrURL,
 		expiredAt,
 	)
 
@@ -107,6 +135,7 @@ func (p *paymentService) GenerateQRIS(
 		OrderID:   mtRes.OrderID,
 		QrURL:     mtRes.QrURL,
 		ExpiredAt: expiredAt,
+		BillID:    input.BillID,
 		Status:    model.TransactionStatusPending,
 	}
 
@@ -115,12 +144,12 @@ func (p *paymentService) GenerateQRIS(
 
 func NewPaymentService(
 	midtransClient payment.MidtransClientInterface,
-	transactionService TransactionServiceInterface,
+	transactionRepo repository.TransactionRepositoryInterface,
 	merchantRepository repository.MerchantRepositoryInterface,
 ) PaymentServiceInterface {
 	return &paymentService{
 		midtransClient:     midtransClient,
-		transactionService: transactionService,
+		transactionRepo:    transactionRepo,
 		merchantRepository: merchantRepository,
 	}
 }

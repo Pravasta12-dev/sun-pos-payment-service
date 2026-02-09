@@ -77,7 +77,7 @@ func (m *midtransClient) ChargeQris(
 
 	if resp.StatusCode >= 300 {
 		log.Errorf("[MidtransClient-4] received non-2xx response: %d", resp.StatusCode)
-		return nil, err
+		return nil, fmt.Errorf("midtrans returned status code: %d", resp.StatusCode)
 	}
 
 	var result response.MidtransChargeResponse

@@ -5,7 +5,7 @@ import "time"
 type GenerateQRISInput struct {
 	MerchantID    string
 	ServerKey     string
-	OrderID       string
+	BillID        string
 	Amount        float64
 	Acquirer      string
 	ExpireMinutes int
@@ -14,6 +14,7 @@ type GenerateQRISInput struct {
 type GenerateQRISResult struct {
 	OrderID   string
 	QrURL     string
+	BillID    string
 	ExpiredAt *time.Time
 	Status    string
 }

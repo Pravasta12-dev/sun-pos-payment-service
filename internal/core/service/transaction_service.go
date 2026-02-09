@@ -9,13 +9,13 @@ import (
 )
 
 type TransactionServiceInterface interface {
-	CreateTransaction(
-		merchantID string,
-		orderID string,
-		amount float64,
-		paymentType string,
-		expiredAt *time.Time,
-	) (*model.TransactionModel, error)
+	// CreateTransaction(
+	// 	merchantID string,
+	// 	orderID string,
+	// 	amount float64,
+	// 	paymentType string,
+	// 	expiredAt *time.Time,
+	// ) (*model.TransactionModel, error)
 	MarkAsPaid(
 		orderID string,
 		paidAt *time.Time,
@@ -23,22 +23,41 @@ type TransactionServiceInterface interface {
 	MarkAsExpired(orderID string) error
 	MarkAsFailed(orderID string) error
 	GetByOrderID(orderID string) (*model.TransactionModel, error)
+	GetByBillID(merchantID string, billID string) (*model.TransactionModel, error)
 }
 
 type transactionService struct {
 	transactionRepo repository.TransactionRepositoryInterface
 }
 
-// CreateTransaction implements [TransactionServiceInterface].
-func (t *transactionService) CreateTransaction(merchantID string, orderID string, amount float64, paymentType string, expiredAt *time.Time) (*model.TransactionModel, error) {
-	return t.transactionRepo.CreateTransaction(
-		merchantID,
-		orderID,
-		amount,
-		paymentType,
-		expiredAt,
-	)
+// GetByBillID implements [TransactionServiceInterface].
+func (t *transactionService) GetByBillID(merchantID string, billID string) (*model.TransactionModel, error) {
+	tx, err := t.transactionRepo.FindByBillID(merchantID, billID)
+
+	if err != nil {
+		log.Errorf("[TransactionService-5] failed to get transaction by bill ID: %v", err)
+		return nil, err
+	}
+
+	return tx, nil
 }
+
+// // CreateTransaction implements [TransactionServiceInterface].
+// func (t *transactionService) CreateTransaction(
+// 	merchantID string,
+// 	orderID string,
+// 	amount float64,
+// 	paymentType string,
+// 	expiredAt *time.Time,
+// ) (*model.TransactionModel, error) {
+// 	return t.transactionRepo.CreateTransaction(
+// 		merchantID,
+// 		orderID,
+// 		amount,
+// 		paymentType,
+// 		expiredAt,
+// 	)
+// }
 
 // GetByOrderID implements [TransactionServiceInterface].
 func (t *transactionService) GetByOrderID(orderID string) (*model.TransactionModel, error) {

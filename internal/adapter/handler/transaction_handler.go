@@ -24,14 +24,22 @@ func (t *transactionHandler) GetByOrderID(c echo.Context) error {
 		dataResp    response.TransactionResponse
 	)
 
-	if req == "" {
-		return c.JSON(http.StatusBadRequest, response.DefaultResponse{
-			Message: "order ID is required",
+	if err := c.Validate(req); err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, response.DefaultResponse{
+			Message: "invalid request",
 			Data:    nil,
 		})
 	}
 
-	tx, err := t.transactionService.GetByOrderID(req)
+	merchantID := c.Request().Header.Get("X-Merchant-ID")
+	if merchantID == "" {
+		return c.JSON(http.StatusBadRequest, response.DefaultResponse{
+			Message: "Missing Merchant ID in header",
+			Data:    nil,
+		})
+	}
+
+	tx, err := t.transactionService.GetByBillID(merchantID, req)
 
 	if err != nil {
 		if err.Error() == "404" {

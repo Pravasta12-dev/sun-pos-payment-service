@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"sun-pos-payment-service/internal/adapter/dto/request"
 	"sun-pos-payment-service/internal/adapter/dto/response"
@@ -78,6 +79,10 @@ func (m *midtransWebhook) HandleWebhook(e echo.Context) error {
 			Data:    nil,
 		})
 	}
+
+	fmt.Println("[Midtrans Webhook Handler] Valid signature confirmed for order ID:", req.OrderID)
+	fmt.Println("[Midtrans Webhook Handler] Status Code:", req.StatusCode)
+	fmt.Println("[Midtrans Webhook Handler] Transaction Status:", req.TransactionStatus)
 
 	switch req.TransactionStatus {
 	case "settlement", "capture":

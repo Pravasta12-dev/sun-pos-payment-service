@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"sun-pos-payment-service/internal/core/domain/entity"
 	"sun-pos-payment-service/internal/core/domain/model"
 	"time"
@@ -13,9 +14,11 @@ import (
 type TransactionRepositoryInterface interface {
 	CreateTransaction(
 		merchantID string,
+		billID string,
 		orderID string,
 		amount float64,
 		paymentType string,
+		qrURL string,
 		expiredAt *time.Time,
 	) (*model.TransactionModel, error)
 	UpdateStatus(
@@ -24,25 +27,95 @@ type TransactionRepositoryInterface interface {
 		paidAt *time.Time,
 	) error
 	FindByOrderID(orderID string) (*model.TransactionModel, error)
+	FindByBillID(merchantID, billID string) (*model.TransactionModel, error)
+	FindActivePendingTransaction(merchantID string, billID string, paymentType string) (*model.TransactionModel, error)
 }
 
 type transactionRepository struct {
 	db *gorm.DB
 }
 
+// FindByBillID implements [TransactionRepositoryInterface].
+func (t *transactionRepository) FindByBillID(merchantID, billID string) (*model.TransactionModel, error) {
+	var e entity.TransactionEntity
+
+	// FETCH USING WHERE().FIRST() with status 'pending' AND not expired
+	err := t.db.Where("merchant_id = ? AND bill_id = ? AND (expired_at IS NULL OR expired_at > NOW())", merchantID, billID).Order("created_at DESC").Limit(1).First(&e).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = errors.New("404")
+			log.Infof("[TransactionRepository-1] transaction not found: %v", err)
+			return nil, err
+		}
+
+		log.Errorf("[TransactionRepository-2] failed to find transaction by bill ID: %v", err)
+		return nil, err
+	}
+
+	transactionModel := &model.TransactionModel{
+		ID:          e.ID,
+		MerchantID:  e.MerchantID,
+		OrderID:     e.OrderID,
+		BillID:      e.BillID,
+		Amount:      e.Amount,
+		PaymentType: e.PaymentType,
+		Status:      e.Status,
+		PaidAt:      e.PaidAt,
+		ExpiredAt:   e.ExpiredAt,
+	}
+
+	return transactionModel, nil
+}
+
+// FindActivePendingTransaction implements [TransactionRepositoryInterface].
+func (t *transactionRepository) FindActivePendingTransaction(merchantID string, billID string, paymentType string) (*model.TransactionModel, error) {
+	var e entity.TransactionEntity
+
+	err := t.db.Where("merchant_id = ? AND bill_id = ? AND payment_type = ? AND status = ? AND (expired_at IS NULL OR expired_at > NOW())",
+		merchantID, billID, paymentType, "pending").Order("created_at DESC").Limit(1).First(&e).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = errors.New("404")
+			log.Infof("[TransactionRepository-2] active pending transaction not found: %v", err)
+			return nil, err
+		}
+
+		log.Errorf("[TransactionRepository-2] failed to find active pending transaction: %v", err)
+		return nil, err
+	}
+
+	transactionModel := &model.TransactionModel{
+		ID:          e.ID,
+		MerchantID:  e.MerchantID,
+		OrderID:     e.OrderID,
+		BillID:      e.BillID,
+		Amount:      e.Amount,
+		PaymentType: e.PaymentType,
+		QrURL:       e.QrURL,
+		Status:      e.Status,
+		PaidAt:      e.PaidAt,
+		ExpiredAt:   e.ExpiredAt,
+	}
+
+	return transactionModel, nil
+}
+
 // CreateTransaction implements [TransactionRepositoryInterface].
 func (t *transactionRepository) CreateTransaction(
 	merchantID string,
+	billID string,
 	orderID string,
 	amount float64,
 	paymentType string,
+	qrURL string,
 	expiredAt *time.Time,
 ) (*model.TransactionModel, error) {
 	query := `
 		INSERT INTO transactions
-			(merchant_id, order_id, amount, payment_type, status, expired_at)
+			(merchant_id, bill_id, order_id, amount, payment_type, status, qr_url, expired_at)
 		VALUES
-			($1, $2, $3, $4, 'pending', $5)
+			($1, $2, $3, $4, $5, 'pending', $6, $7)
 		RETURNING id
 	`
 
@@ -51,9 +124,11 @@ func (t *transactionRepository) CreateTransaction(
 	err := t.db.Raw(
 		query,
 		merchantID,
+		billID,
 		orderID,
 		amount,
 		paymentType,
+		qrURL,
 		expiredAt,
 	).Scan(&e.ID).Error
 
@@ -68,6 +143,7 @@ func (t *transactionRepository) CreateTransaction(
 	e.PaymentType = paymentType
 	e.Status = model.TransactionStatusPending
 	e.ExpiredAt = expiredAt
+	e.QrURL = &qrURL
 
 	transactionModel := &model.TransactionModel{
 		ID:          e.ID,
@@ -76,6 +152,7 @@ func (t *transactionRepository) CreateTransaction(
 		Amount:      e.Amount,
 		PaymentType: e.PaymentType,
 		Status:      e.Status,
+		QrURL:       e.QrURL,
 		ExpiredAt:   e.ExpiredAt,
 	}
 
@@ -84,15 +161,10 @@ func (t *transactionRepository) CreateTransaction(
 
 // FindByOrderID implements [TransactionRepositoryInterface].
 func (t *transactionRepository) FindByOrderID(orderID string) (*model.TransactionModel, error) {
-	query := `
-		SELECT id, merchant_id, order_id, amount, payment_type, status, paid_at, expired_at
-		FROM transactions
-		WHERE order_id = $1
-	`
-
 	var e entity.TransactionEntity
 
-	err := t.db.Raw(query, orderID).Scan(&e).Error
+	// Menggunakan Where().First() - otomatis return gorm.ErrRecordNotFound jika tidak ada data
+	err := t.db.Where("order_id = ?", orderID).First(&e).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			err = errors.New("404")
@@ -114,6 +186,8 @@ func (t *transactionRepository) FindByOrderID(orderID string) (*model.Transactio
 		PaidAt:      e.PaidAt,
 		ExpiredAt:   e.ExpiredAt,
 	}
+
+	fmt.Println("[LOG] Mapped TransactionModel:", transactionModel)
 
 	return transactionModel, nil
 }
