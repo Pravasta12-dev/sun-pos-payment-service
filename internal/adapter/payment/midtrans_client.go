@@ -88,7 +88,7 @@ func (m *midtransClient) ChargeQris(
 
 	var qrUrl string
 	for _, a := range result.Actions {
-		if a.Name == "generate-qr-code-v2" {
+		if a.Name == "generate-qr-code" {
 			qrUrl = a.URL
 			break
 		}
@@ -97,7 +97,7 @@ func (m *midtransClient) ChargeQris(
 	if qrUrl == "" {
 		log.Errorf("[MidtransClient-6] qr code url not found in response")
 		for _, a := range result.Actions {
-			if a.Name == "generate-qr-code" {
+			if a.Name == "generate-qr-code-v2" {
 				qrUrl = a.URL
 				break
 			}
@@ -105,7 +105,7 @@ func (m *midtransClient) ChargeQris(
 	}
 
 	if qrUrl == "" {
-		log.Errorf("[MidtransClient-7] qr code url v1 not found in response")
+		log.Errorf("[MidtransClient-7] qr code url v2 not found in response")
 		return nil, errors.New("qr code url not found in response")
 	}
 
