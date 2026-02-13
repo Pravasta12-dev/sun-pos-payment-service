@@ -18,8 +18,9 @@ type PsqlDB struct {
 }
 
 type Midtrans struct {
-	Env     string `json:"env"`
-	BaseURL string `json:"base_url"`
+	Env       string `json:"env"`
+	BaseURL   string `json:"base_url"`
+	ServerKey string `json:"server_key"`
 }
 
 type Payment struct {
@@ -71,8 +72,9 @@ func NewConfig() *Config {
 			DBMaxIdle: viper.GetInt("DATABASE_MAX_IDLE_CONNECTIONS"),
 		},
 		Midtrans: Midtrans{
-			Env:     midtransEnv,
-			BaseURL: baseUrl,
+			Env:       midtransEnv,
+			BaseURL:   baseUrl,
+			ServerKey: viper.GetString("MIDTRANS_SERVER_KEY"),
 		},
 		Payment: Payment{
 			QrisAcquirer:     viper.GetString("PAYMENT_QRIS_ACQUIRER"),

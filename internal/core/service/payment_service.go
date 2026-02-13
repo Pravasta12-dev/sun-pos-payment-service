@@ -6,6 +6,7 @@ import (
 	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/domain/model"
 	"sun-pos-payment-service/internal/core/domain/payment"
+	"sun-pos-payment-service/utils/enum"
 	"time"
 
 	"github.com/labstack/gommon/log"
@@ -13,12 +14,76 @@ import (
 
 type PaymentServiceInterface interface {
 	GenerateQRIS(input GenerateQRISInput) (*GenerateQRISResult, error)
+	GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*GenerateQRISResult, error)
 }
 
 type paymentService struct {
 	midtransClient     payment.MidtransClientInterface
 	transactionRepo    repository.TransactionRepositoryInterface
 	merchantRepository repository.MerchantRepositoryInterface
+	ownerServerKey     string
+}
+
+// GenerateOwnerQRIS implements [PaymentServiceInterface].
+func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*GenerateQRISResult, error) {
+	if input.OrderID == "" || input.Amount <= 0 {
+		log.Errorf("[Payment Service-Owner-1] invalid order ID or amount")
+		return nil, errors.New("invalid order ID or amount")
+	}
+
+	if p.ownerServerKey == "" {
+		log.Errorf("[Payment Service-Owner-2] owner server key is not configured")
+		return nil, errors.New("owner server key is not configured")
+	}
+
+	expMinutes := input.ExpireMinutes
+	if expMinutes <= 0 {
+		expMinutes = 15
+	}
+
+	mtRes, err := p.midtransClient.ChargeQris(
+		p.ownerServerKey,
+		payment.QrisChargeInput{
+			OrderID: input.OrderID,
+			Amount:  input.Amount,
+		},
+	)
+
+	if err != nil {
+		log.Errorf("[Payment Service-Owner-3] failed to charge QRIS: %v", err)
+		return nil, err
+	}
+
+	expiredAt := mtRes.ExpiredAt
+	if expiredAt == nil {
+		t := time.Now().Add(time.Duration(expMinutes) * time.Minute)
+		expiredAt = &t
+	}
+
+	_, err = p.transactionRepo.CreateTransaction(
+		enum.ScopeOwner,
+		nil,
+		nil,
+		input.OrderID,
+		input.Amount,
+		model.PaymentTypeQRIS,
+		mtRes.QrURL,
+		expiredAt,
+	)
+
+	if err != nil {
+		log.Errorf("[Payment Service-Owner-4] failed to create transaction: %v", err)
+		return nil, err
+	}
+
+	result := &GenerateQRISResult{
+		OrderID:   mtRes.OrderID,
+		QrURL:     mtRes.QrURL,
+		ExpiredAt: expiredAt,
+		Status:    enum.TransactionStatusPending,
+	}
+
+	return result, nil
 }
 
 // GenerateQRIS implements [PaymentServiceInterface].
@@ -86,7 +151,7 @@ func (p *paymentService) GenerateQRIS(
 		}
 
 		log.Infof("[Payment Service-3] existing pending transaction found with different amount, creating new transaction")
-		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, model.TransactionStatusFailed, nil)
+		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, enum.TransactionStatusFailed, nil)
 	}
 
 	paymentOrderID := fmt.Sprintf("QRIS-%s-%d", input.BillID, time.Now().UnixNano())
@@ -117,8 +182,9 @@ func (p *paymentService) GenerateQRIS(
 	}
 
 	_, err = p.transactionRepo.CreateTransaction(
-		merchant.ID,
-		input.BillID,
+		enum.ScopeMerchant,
+		&merchant.ID,
+		&input.BillID,
 		paymentOrderID,
 		input.Amount,
 		model.PaymentTypeQRIS,
@@ -136,7 +202,7 @@ func (p *paymentService) GenerateQRIS(
 		QrURL:     mtRes.QrURL,
 		ExpiredAt: expiredAt,
 		BillID:    input.BillID,
-		Status:    model.TransactionStatusPending,
+		Status:    enum.TransactionStatusPending,
 	}
 
 	return result, nil
@@ -146,10 +212,12 @@ func NewPaymentService(
 	midtransClient payment.MidtransClientInterface,
 	transactionRepo repository.TransactionRepositoryInterface,
 	merchantRepository repository.MerchantRepositoryInterface,
+	ownerServerKey string,
 ) PaymentServiceInterface {
 	return &paymentService{
 		midtransClient:     midtransClient,
 		transactionRepo:    transactionRepo,
 		merchantRepository: merchantRepository,
+		ownerServerKey:     ownerServerKey,
 	}
 }

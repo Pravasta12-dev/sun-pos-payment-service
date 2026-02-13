@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS transactions (
     id BIGSERIAL PRIMARY KEY,
-    merchant_id UUID NOT NULL,
+    merchant_id UUID,
     order_id VARCHAR(100) NOT NULL UNIQUE,
     amount DECIMAL(15, 2) NOT NULL,
     payment_type VARCHAR(50) NOT NULL DEFAULT 'qris',

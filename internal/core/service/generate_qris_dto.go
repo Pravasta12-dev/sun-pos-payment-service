@@ -1,6 +1,9 @@
 package service
 
-import "time"
+import (
+	"sun-pos-payment-service/utils/enum"
+	"time"
+)
 
 type GenerateQRISInput struct {
 	MerchantID    string
@@ -16,5 +19,11 @@ type GenerateQRISResult struct {
 	QrURL     string
 	BillID    string
 	ExpiredAt *time.Time
-	Status    string
+	Status    enum.TransactionStatus
+}
+
+type GenerateOwnerQRISInput struct {
+	OrderID       string
+	Amount        float64
+	ExpireMinutes int
 }

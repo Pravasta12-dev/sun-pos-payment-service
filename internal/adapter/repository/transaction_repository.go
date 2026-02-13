@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sun-pos-payment-service/internal/core/domain/entity"
 	"sun-pos-payment-service/internal/core/domain/model"
+	"sun-pos-payment-service/utils/enum"
 	"time"
 
 	"github.com/labstack/gommon/log"
@@ -13,8 +14,9 @@ import (
 
 type TransactionRepositoryInterface interface {
 	CreateTransaction(
-		merchantID string,
-		billID string,
+		scope enum.TransactionScope,
+		merchantID *string,
+		billID *string,
 		orderID string,
 		amount float64,
 		paymentType string,
@@ -23,7 +25,7 @@ type TransactionRepositoryInterface interface {
 	) (*model.TransactionModel, error)
 	UpdateStatus(
 		orderID string,
-		status string,
+		status enum.TransactionStatus,
 		paidAt *time.Time,
 	) error
 	FindByOrderID(orderID string) (*model.TransactionModel, error)
@@ -72,8 +74,7 @@ func (t *transactionRepository) FindActivePendingTransaction(merchantID string, 
 	var e entity.TransactionEntity
 
 	err := t.db.Where("merchant_id = ? AND bill_id = ? AND payment_type = ? AND status = ? AND (expired_at IS NULL OR expired_at > NOW())",
-		merchantID, billID, paymentType, "pending").Order("created_at DESC").Limit(1).First(&e).Error
-
+		merchantID, billID, paymentType, string(enum.TransactionStatusPending)).Order("created_at DESC").Limit(1).First(&e).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			err = errors.New("404")
@@ -103,8 +104,9 @@ func (t *transactionRepository) FindActivePendingTransaction(merchantID string, 
 
 // CreateTransaction implements [TransactionRepositoryInterface].
 func (t *transactionRepository) CreateTransaction(
-	merchantID string,
-	billID string,
+	scope enum.TransactionScope,
+	merchantID *string,
+	billID *string,
 	orderID string,
 	amount float64,
 	paymentType string,
@@ -113,9 +115,9 @@ func (t *transactionRepository) CreateTransaction(
 ) (*model.TransactionModel, error) {
 	query := `
 		INSERT INTO transactions
-			(merchant_id, bill_id, order_id, amount, payment_type, status, qr_url, expired_at)
+			(merchant_id, bill_id, order_id, amount, payment_type, status, qr_url, expired_at, transaction_scope)
 		VALUES
-			($1, $2, $3, $4, $5, 'pending', $6, $7)
+			($1, $2, $3, $4, $5, 'pending', $6, $7, $8)
 		RETURNING id
 	`
 
@@ -130,6 +132,7 @@ func (t *transactionRepository) CreateTransaction(
 		paymentType,
 		qrURL,
 		expiredAt,
+		scope,
 	).Scan(&e.ID).Error
 
 	if err != nil {
@@ -137,23 +140,29 @@ func (t *transactionRepository) CreateTransaction(
 		return nil, err
 	}
 
-	e.MerchantID = merchantID
+	e.MerchantID = ""
+	if merchantID != nil {
+		e.MerchantID = *merchantID
+	}
+
 	e.OrderID = orderID
 	e.Amount = amount
 	e.PaymentType = paymentType
-	e.Status = model.TransactionStatusPending
+	e.Status = enum.TransactionStatusPending
+	e.TransactionScope = scope
 	e.ExpiredAt = expiredAt
 	e.QrURL = &qrURL
 
 	transactionModel := &model.TransactionModel{
-		ID:          e.ID,
-		MerchantID:  e.MerchantID,
-		OrderID:     e.OrderID,
-		Amount:      e.Amount,
-		PaymentType: e.PaymentType,
-		Status:      e.Status,
-		QrURL:       e.QrURL,
-		ExpiredAt:   e.ExpiredAt,
+		ID:               e.ID,
+		MerchantID:       e.MerchantID,
+		OrderID:          e.OrderID,
+		Amount:           e.Amount,
+		PaymentType:      e.PaymentType,
+		Status:           e.Status,
+		QrURL:            e.QrURL,
+		ExpiredAt:        e.ExpiredAt,
+		TransactionScope: e.TransactionScope,
 	}
 
 	return transactionModel, nil
@@ -177,14 +186,15 @@ func (t *transactionRepository) FindByOrderID(orderID string) (*model.Transactio
 	}
 
 	transactionModel := &model.TransactionModel{
-		ID:          e.ID,
-		MerchantID:  e.MerchantID,
-		OrderID:     e.OrderID,
-		Amount:      e.Amount,
-		PaymentType: e.PaymentType,
-		Status:      e.Status,
-		PaidAt:      e.PaidAt,
-		ExpiredAt:   e.ExpiredAt,
+		ID:               e.ID,
+		MerchantID:       e.MerchantID,
+		OrderID:          e.OrderID,
+		Amount:           e.Amount,
+		PaymentType:      e.PaymentType,
+		TransactionScope: e.TransactionScope,
+		Status:           e.Status,
+		PaidAt:           e.PaidAt,
+		ExpiredAt:        e.ExpiredAt,
 	}
 
 	fmt.Println("[LOG] Mapped TransactionModel:", transactionModel)
@@ -195,7 +205,7 @@ func (t *transactionRepository) FindByOrderID(orderID string) (*model.Transactio
 // UpdateStatus implements [TransactionRepositoryInterface].
 func (t *transactionRepository) UpdateStatus(
 	orderID string,
-	status string,
+	status enum.TransactionStatus,
 	paidAt *time.Time,
 ) error {
 	query := `
@@ -204,6 +214,7 @@ func (t *transactionRepository) UpdateStatus(
 			paid_at = $2,
 			updated_at = NOW()
 		WHERE order_id = $3
+		AND status != '` + string(enum.TransactionStatusPaid) + `'
 	`
 
 	if err := t.db.Exec(query, status, paidAt, orderID).Error; err != nil {

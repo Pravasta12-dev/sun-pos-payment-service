@@ -12,10 +12,16 @@ import (
 
 type PaymentHandlerInterface interface {
 	GenerateQris(c echo.Context) error
+	GenerateOwnerQris(c echo.Context) error
 }
 
 type paymentHandler struct {
 	paymentService service.PaymentServiceInterface
+}
+
+// GenerateOwnerQris implements [PaymentHandlerInterface].
+func (p *paymentHandler) GenerateOwnerQris(c echo.Context) error {
+	panic("unimplemented")
 }
 
 // GenerateQris implements [PaymentHandlerInterface].
@@ -38,6 +44,14 @@ func (p *paymentHandler) GenerateQris(c echo.Context) error {
 		log.Errorf("[Payment Handler-4] validation failed: %v", err)
 		return c.JSON(http.StatusUnprocessableEntity, response.DefaultResponse{
 			Message: "validation failed: " + err.Error(),
+			Data:    nil,
+		})
+	}
+
+	if req.MerchantID == "" {
+		log.Infof("[Payment Handler-5] Merchant ID is required")
+		return c.JSON(http.StatusBadRequest, response.DefaultResponse{
+			Message: "merchant id is required",
 			Data:    nil,
 		})
 	}

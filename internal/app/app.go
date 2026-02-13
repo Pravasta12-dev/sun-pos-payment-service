@@ -47,6 +47,7 @@ func RunServer() {
 		midtransClient,
 		transactionRepository,
 		merchantRepository,
+		cfg.Midtrans.ServerKey,
 	)
 
 	e := echo.New()

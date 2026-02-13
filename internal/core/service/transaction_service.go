@@ -3,6 +3,7 @@ package service
 import (
 	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/domain/model"
+	"sun-pos-payment-service/utils/enum"
 	"time"
 
 	"github.com/labstack/gommon/log"
@@ -75,7 +76,7 @@ func (t *transactionService) GetByOrderID(orderID string) (*model.TransactionMod
 func (t *transactionService) MarkAsExpired(orderID string) error {
 	if err := t.transactionRepo.UpdateStatus(
 		orderID,
-		model.TransactionStatusExpired,
+		enum.TransactionStatusExpired,
 		nil,
 	); err != nil {
 		log.Errorf("[TransactionService-2] failed to mark transaction as expired: %v", err)
@@ -89,7 +90,7 @@ func (t *transactionService) MarkAsExpired(orderID string) error {
 func (t *transactionService) MarkAsFailed(orderID string) error {
 	if err := t.transactionRepo.UpdateStatus(
 		orderID,
-		model.TransactionStatusFailed,
+		enum.TransactionStatusFailed,
 		nil,
 	); err != nil {
 		log.Errorf("[TransactionService-3] failed to mark transaction as failed: %v", err)
@@ -108,7 +109,7 @@ func (t *transactionService) MarkAsPaid(orderID string, paidAt *time.Time) error
 
 	if err := t.transactionRepo.UpdateStatus(
 		orderID,
-		model.TransactionStatusPaid,
+		enum.TransactionStatusPaid,
 		paidAt,
 	); err != nil {
 		log.Errorf("[TransactionService-1] failed to mark transaction as paid: %v", err)
