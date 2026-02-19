@@ -21,7 +21,56 @@ type paymentHandler struct {
 
 // GenerateOwnerQris implements [PaymentHandlerInterface].
 func (p *paymentHandler) GenerateOwnerQris(c echo.Context) error {
-	panic("unimplemented")
+	var (
+		request         request.GenerateOwnerQrisRequest
+		defaultResponse response.DefaultResponse
+	)
+
+	if err := c.Bind(&request); err != nil {
+		log.Errorf("[Payment Handler-Owner-1] failed to bind request: %v", err)
+		defaultResponse.Message = "invalid request payload"
+		defaultResponse.Data = nil
+		return c.JSON(http.StatusBadRequest, defaultResponse)
+	}
+
+	if err := c.Validate(&request); err != nil {
+		log.Errorf("[Payment Handler-Owner-2] validation failed: %v", err)
+		defaultResponse.Message = "validation failed: " + err.Error()
+		defaultResponse.Data = nil
+		return c.JSON(http.StatusUnprocessableEntity, defaultResponse)
+	}
+
+	result, err := p.paymentService.GenerateOwnerQRIS(
+		service.GenerateOwnerQRISInput{
+			OrderID:       request.OrderID,
+			Amount:        request.Amount,
+			Acquirer:      request.Acquirer,
+			ExpireMinutes: request.ExpireMinutes,
+		},
+	)
+
+	if err != nil {
+		defaultResponse.Message = "failed to generate QRIS: " + err.Error()
+		defaultResponse.Data = nil
+
+		if err.Error() == "404" {
+			log.Infof("[Payment Handler-Owner-3] merchant not found: %v", err)
+			return c.JSON(http.StatusNotFound, defaultResponse)
+		}
+
+		log.Errorf("[Payment Handler-Owner-4] failed to generate QRIS: %v", err)
+		return c.JSON(http.StatusInternalServerError, defaultResponse)
+	}
+
+	defaultResponse.Message = "QRIS generated successfully"
+	defaultResponse.Data = response.GenerateQrisResponse{
+		OrderID:   result.OrderID,
+		QrUrl:     result.QrURL,
+		ExpiredAt: result.ExpiredAt,
+		Status:    result.Status,
+	}
+
+	return c.JSON(http.StatusOK, defaultResponse)
 }
 
 // GenerateQris implements [PaymentHandlerInterface].

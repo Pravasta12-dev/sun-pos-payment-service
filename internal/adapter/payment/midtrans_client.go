@@ -29,6 +29,11 @@ func (m *midtransClient) ChargeQris(
 		PaymentType: "qris",
 	}
 
+	if serverKey == "" {
+		log.Errorf("[MidtransClient] server key is empty")
+		return nil, errors.New("server key is required")
+	}
+
 	reqBody.TransactionDetails.OrderID = input.OrderID
 	reqBody.TransactionDetails.GrossAmount = input.Amount
 	reqBody.Qris.Acquirer = input.Acquirer
@@ -40,9 +45,6 @@ func (m *midtransClient) ChargeQris(
 	}
 
 	auth := base64.StdEncoding.EncodeToString([]byte(serverKey + ":"))
-
-	fmt.Println("[MidtransClient] Request Payload:", string(payload))
-	fmt.Println("[MidtransClient] Authorization Header:", auth)
 
 	req, err := http.NewRequest(
 		http.MethodPost,
@@ -63,15 +65,11 @@ func (m *midtransClient) ChargeQris(
 	req.Header.Set("Authorization", "Basic "+auth)
 	req.Header.Set("Accept", "application/json")
 
-	fmt.Println("[MidtransClient] Headers Set:", req.Header)
-
 	resp, err := m.client.Do(req)
 	if err != nil {
 		log.Errorf("[MidtransClient-3] failed to perform request: %v", err)
 		return nil, err
 	}
-
-	fmt.Println("[MidtransClient] Response Status:", resp.Status)
 
 	defer resp.Body.Close()
 
@@ -108,6 +106,8 @@ func (m *midtransClient) ChargeQris(
 		log.Errorf("[MidtransClient-7] qr code url v2 not found in response")
 		return nil, errors.New("qr code url not found in response")
 	}
+
+	fmt.Println("[MidtransClient-Result] QR URL:", qrUrl)
 
 	return &domain.QrisChargeResult{
 		OrderID: result.OrderID,

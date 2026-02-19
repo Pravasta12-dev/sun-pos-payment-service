@@ -8,6 +8,7 @@ import (
 	"sun-pos-payment-service/internal/adapter/repository"
 	"sun-pos-payment-service/internal/core/service"
 	"sun-pos-payment-service/internal/security"
+	"sun-pos-payment-service/utils/enum"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -21,6 +22,7 @@ type MitransWebhookHandlerInterface interface {
 type midtransWebhook struct {
 	transactionService service.TransactionServiceInterface
 	merchantRepository repository.MerchantRepositoryInterface
+	ownerServerKey     string
 }
 
 // HandleWebhook implements MitransWebhookHandlerInterface.
@@ -47,17 +49,24 @@ func (m *midtransWebhook) HandleWebhook(e echo.Context) error {
 		})
 	}
 
-	merchant, err := m.merchantRepository.FindByID(tx.MerchantID)
-	if err != nil {
-		log.Errorf("[Midtrans Webhook Handler] failed to find merchant: %v", err)
-		return e.JSON(http.StatusInternalServerError, response.DefaultResponse{
-			Message: err.Error(),
-			Data:    nil,
-		})
+	var serverKey string
+
+	if tx.TransactionScope == enum.ScopeOwner {
+		serverKey = m.ownerServerKey
+	} else {
+		merchant, err := m.merchantRepository.FindByID(tx.MerchantID)
+		if err != nil {
+			log.Errorf("[Midtrans Webhook Handler] failed to find merchant: %v", err)
+			return e.JSON(http.StatusInternalServerError, response.DefaultResponse{
+				Message: err.Error(),
+				Data:    nil,
+			})
+		}
+		serverKey = merchant.ServerKey
 	}
 
-	if merchant.ServerKey == "" {
-		log.Errorf("[Midtrans Webhook Handler] merchant server key is empty for merchant ID: %s", merchant.ID)
+	if serverKey == "" {
+		log.Errorf("[Midtrans Webhook Handler] server key is not configured for order ID: %s", req.OrderID)
 		return e.JSON(http.StatusInternalServerError, response.DefaultResponse{
 			Message: "Merchant server key is not configured",
 			Data:    nil,
@@ -68,7 +77,7 @@ func (m *midtransWebhook) HandleWebhook(e echo.Context) error {
 		req.OrderID,
 		req.StatusCode,
 		req.GrossAmount,
-		merchant.ServerKey,
+		serverKey,
 		req.SignatureKey,
 	)
 
@@ -138,9 +147,11 @@ func (m *midtransWebhook) HandleWebhook(e echo.Context) error {
 func NewMidtransWebhookHandler(
 	transactionService service.TransactionServiceInterface,
 	merchantRepository repository.MerchantRepositoryInterface,
+	ownerServerKey string,
 ) MitransWebhookHandlerInterface {
 	return &midtransWebhook{
 		transactionService: transactionService,
 		merchantRepository: merchantRepository,
+		ownerServerKey:     ownerServerKey,
 	}
 }

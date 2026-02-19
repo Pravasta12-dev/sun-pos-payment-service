@@ -25,5 +25,6 @@ type GenerateQRISResult struct {
 type GenerateOwnerQRISInput struct {
 	OrderID       string
 	Amount        float64
+	Acquirer      string
 	ExpireMinutes int
 }

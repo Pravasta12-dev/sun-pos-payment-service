@@ -4,16 +4,70 @@ import (
 	"net/http"
 	"sun-pos-payment-service/internal/adapter/dto/response"
 	"sun-pos-payment-service/internal/core/service"
+	"sun-pos-payment-service/utils/enum"
 
 	"github.com/labstack/echo/v4"
 )
 
 type TransactionHandlerInterface interface {
 	GetByOrderID(c echo.Context) error
+	GetByOwnerOrderID(c echo.Context) error
 }
 
 type transactionHandler struct {
 	transactionService service.TransactionServiceInterface
+}
+
+// GetByOwnerOrderID implements [TransactionHandlerInterface].
+func (t *transactionHandler) GetByOwnerOrderID(c echo.Context) error {
+	var (
+		req         string = c.Param("order_id")
+		defaultResp response.DefaultResponse
+		dataResp    response.TransactionResponse
+	)
+
+	if err := c.Validate(req); err != nil {
+		defaultResp.Message = "invalid request"
+		defaultResp.Data = nil
+		return c.JSON(http.StatusUnprocessableEntity, defaultResp)
+	}
+
+	tx, err := t.transactionService.GetByOrderID(req)
+	if err != nil {
+		if err.Error() == "404" {
+			defaultResp.Message = "transaction not found"
+			defaultResp.Data = nil
+			return c.JSON(http.StatusNotFound, defaultResp)
+		}
+		defaultResp.Message = "failed to get transaction"
+		defaultResp.Data = nil
+		return c.JSON(http.StatusInternalServerError, defaultResp)
+	}
+
+	if tx.TransactionScope != enum.ScopeOwner {
+		defaultResp.Message = "transaction not found"
+		defaultResp.Data = nil
+		return c.JSON(http.StatusNotFound, defaultResp)
+	}
+
+	dataResp = response.TransactionResponse{
+		ID:          tx.ID,
+		MerchantID:  tx.MerchantID,
+		OrderID:     tx.OrderID,
+		Amount:      tx.Amount,
+		Status:      tx.Status,
+		PaymentType: tx.PaymentType,
+		PaidAt:      tx.PaidAt,
+		ExpiredAt:   tx.ExpiredAt,
+	}
+
+	msg := "transaction retrieved successfully"
+	defaultResp = response.DefaultResponse{
+		Message: msg,
+		Data:    dataResp,
+	}
+
+	return c.JSON(http.StatusOK, defaultResp)
 }
 
 // GetByOrderID implements [TransactionHandlerInterface].

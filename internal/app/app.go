@@ -60,7 +60,11 @@ func RunServer() {
 	e.Validator = customValidator
 
 	paymentHandler := handler.NewPaymentHandler(paymentService)
-	webhookHandler := handler.NewMidtransWebhookHandler(transactionService, merchantRepository)
+	webhookHandler := handler.NewMidtransWebhookHandler(
+		transactionService,
+		merchantRepository,
+		cfg.Midtrans.ServerKey,
+	)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 
 	// // seed

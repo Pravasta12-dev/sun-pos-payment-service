@@ -14,10 +14,15 @@ func RegisterRoutes(
 ) {
 	api := e.Group("/api")
 	payment := api.Group("/payment")
-
-	payment.POST("/generate-qris", paymentHandler.GenerateQris)
 	payment.POST("/webhook", webhookHandler.HandleWebhook)
-	payment.GET("/transaction/:order_id", transactionHandler.GetByOrderID)
+
+	merchant := payment.Group("/merchant")
+	merchant.POST("/generate-qris", paymentHandler.GenerateQris)
+	merchant.GET("/transaction/:order_id", transactionHandler.GetByOrderID)
+
+	owner := payment.Group("/owner")
+	owner.POST("/generate-qris", paymentHandler.GenerateOwnerQris)
+	owner.GET("/transaction/:order_id", transactionHandler.GetByOwnerOrderID)
 
 	e.GET("/ping", func(c echo.Context) error {
 		return c.String(200, "pong")

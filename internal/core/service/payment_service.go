@@ -36,6 +36,25 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 		return nil, errors.New("owner server key is not configured")
 	}
 
+	existingTransaction, err := p.transactionRepo.FindByOrderID(input.OrderID)
+
+	if err != nil && err.Error() != "404" {
+		log.Errorf("[Payment Service-Owner-3] failed to find existing transaction: %v", err)
+		return nil, err
+	}
+
+	if existingTransaction != nil &&
+		existingTransaction.Status == enum.TransactionStatusPending &&
+		existingTransaction.ExpiredAt != nil &&
+		existingTransaction.ExpiredAt.After(time.Now()) {
+		return &GenerateQRISResult{
+			OrderID:   existingTransaction.OrderID,
+			QrURL:     *existingTransaction.QrURL,
+			ExpiredAt: existingTransaction.ExpiredAt,
+			Status:    existingTransaction.Status,
+		}, nil
+	}
+
 	expMinutes := input.ExpireMinutes
 	if expMinutes <= 0 {
 		expMinutes = 15
@@ -44,8 +63,9 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	mtRes, err := p.midtransClient.ChargeQris(
 		p.ownerServerKey,
 		payment.QrisChargeInput{
-			OrderID: input.OrderID,
-			Amount:  input.Amount,
+			OrderID:  input.OrderID,
+			Amount:   input.Amount,
+			Acquirer: input.Acquirer,
 		},
 	)
 
@@ -55,7 +75,7 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	}
 
 	expiredAt := mtRes.ExpiredAt
-	if expiredAt == nil {
+	if expiredAt == nil || expiredAt.IsZero() {
 		t := time.Now().Add(time.Duration(expMinutes) * time.Minute)
 		expiredAt = &t
 	}
@@ -77,7 +97,7 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	}
 
 	result := &GenerateQRISResult{
-		OrderID:   mtRes.OrderID,
+		OrderID:   input.OrderID,
 		QrURL:     mtRes.QrURL,
 		ExpiredAt: expiredAt,
 		Status:    enum.TransactionStatusPending,
