@@ -1,14 +1,21 @@
 package request
 
 type MidtransChargeRequest struct {
-	PaymentType string `json:"payment_type"`
+	PaymentType        string               `json:"payment_type"`
+	TransactionDetails TransactionDetails   `json:"transaction_details"`
+	Qris               *Qris                `json:"qris,omitempty"`
+	BankTransfer       *BankTransferRequest `json:"bank_transfer,omitempty"`
+}
 
-	TransactionDetails struct {
-		OrderID     string  `json:"order_id"`
-		GrossAmount float64 `json:"gross_amount"`
-	} `json:"transaction_details"`
+type TransactionDetails struct {
+	OrderID     string  `json:"order_id"`
+	GrossAmount float64 `json:"gross_amount"`
+}
 
-	Qris struct {
-		Acquirer string `json:"acquirer"`
-	} `json:"qris"`
+type Qris struct {
+	Acquirer string `json:"acquirer"`
+}
+
+type BankTransferRequest struct {
+	Bank string `json:"bank"`
 }

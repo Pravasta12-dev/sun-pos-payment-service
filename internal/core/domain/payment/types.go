@@ -13,3 +13,15 @@ type QrisChargeResult struct {
 	QrURL     string
 	ExpiredAt *time.Time
 }
+
+type VaChargeInput struct {
+	OrderID string
+	Amount  float64
+	Bank    string
+}
+
+type VaChargeResult struct {
+	OrderID  string
+	VANumber string
+	Bank     string
+}

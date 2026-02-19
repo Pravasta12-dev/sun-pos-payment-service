@@ -13,10 +13,69 @@ import (
 type PaymentHandlerInterface interface {
 	GenerateQris(c echo.Context) error
 	GenerateOwnerQris(c echo.Context) error
+	GenerateOwnerVA(c echo.Context) error
 }
 
 type paymentHandler struct {
 	paymentService service.PaymentServiceInterface
+}
+
+// GenerateOwnerVA implements [PaymentHandlerInterface].
+func (p *paymentHandler) GenerateOwnerVA(c echo.Context) error {
+	var (
+		req             request.GenerateOwnerVARequest
+		defaultResponse response.DefaultResponse
+		dataResponse    response.GenerateOwnerVaResponse
+	)
+
+	if err := c.Bind(&req); err != nil {
+		log.Errorf("[Payment Handler-Owner VA-1] failed to bind request: %v", err)
+		defaultResponse.Message = "invalid request payload"
+		defaultResponse.Data = nil
+		return c.JSON(http.StatusBadRequest, defaultResponse)
+	}
+
+	if err := c.Validate(&req); err != nil {
+		log.Errorf("[Payment Handler-Owner VA-2] validation failed: %v", err)
+		defaultResponse.Message = "validation failed: " + err.Error()
+		defaultResponse.Data = nil
+		return c.JSON(http.StatusUnprocessableEntity, defaultResponse)
+	}
+
+	result, err := p.paymentService.GenerateOwnerVA(
+		service.GenerateOwnerVAInput{
+			OrderID: req.OrderID,
+			Amount:  req.Amount,
+			Bank:    req.Bank,
+		},
+	)
+
+	if err != nil {
+		log.Errorf("[Payment Handler-Owner VA-3] failed to generate owner VA: %v", err)
+		defaultResponse.Message = "failed to generate owner VA: " + err.Error()
+		defaultResponse.Data = nil
+
+		if err.Error() == "404" {
+			return c.JSON(http.StatusNotFound, defaultResponse)
+		}
+
+		return c.JSON(http.StatusInternalServerError, defaultResponse)
+	}
+
+	dataResponse = response.GenerateOwnerVaResponse{
+		OrderID:    result.OrderID,
+		VaNumber:   result.VaNumber,
+		Bank:       result.Bank,
+		Status:     result.Status,
+		ExipiredAt: result.ExpiredAt,
+	}
+
+	defaultResponse = response.DefaultResponse{
+		Message: "owner VA generated successfully",
+		Data:    dataResponse,
+	}
+
+	return c.JSON(http.StatusOK, defaultResponse)
 }
 
 // GenerateOwnerQris implements [PaymentHandlerInterface].

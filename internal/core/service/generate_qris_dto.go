@@ -28,3 +28,18 @@ type GenerateOwnerQRISInput struct {
 	Acquirer      string
 	ExpireMinutes int
 }
+
+type GenerateOwnerVAInput struct {
+	OrderID       string
+	Amount        float64
+	Bank          string
+	ExpireMinutes int
+}
+
+type GenerateVAResult struct {
+	OrderID   string
+	VaNumber  string
+	Bank      string
+	ExpiredAt *time.Time
+	Status    enum.TransactionStatus
+}

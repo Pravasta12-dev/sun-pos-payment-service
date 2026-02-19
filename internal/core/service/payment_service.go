@@ -15,6 +15,7 @@ import (
 type PaymentServiceInterface interface {
 	GenerateQRIS(input GenerateQRISInput) (*GenerateQRISResult, error)
 	GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*GenerateQRISResult, error)
+	GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateVAResult, error)
 }
 
 type paymentService struct {
@@ -22,6 +23,67 @@ type paymentService struct {
 	transactionRepo    repository.TransactionRepositoryInterface
 	merchantRepository repository.MerchantRepositoryInterface
 	ownerServerKey     string
+}
+
+// GenerateOwnerVA implements [PaymentServiceInterface].
+func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateVAResult, error) {
+	if input.OrderID == "" || input.Amount <= 0 {
+		log.Errorf("[Payment Service-Owner VA-1] invalid order ID or amount")
+		return nil, errors.New("invalid order ID or amount")
+	}
+
+	if p.ownerServerKey == "" {
+		log.Errorf("[Payment Service-Owner VA-2] owner server key is not configured")
+		return nil, errors.New("owner server key is not configured")
+	}
+
+	_, err := p.transactionRepo.FindByOrderID(input.OrderID)
+	if err != nil && err.Error() != "404" {
+		log.Errorf("[Payment Service-Owner VA-3] failed to find existing transaction: %v", err)
+		return nil, err
+	}
+
+	mtRes, err := p.midtransClient.ChargeVa(
+		p.ownerServerKey,
+		payment.VaChargeInput{
+			OrderID: input.OrderID,
+			Amount:  input.Amount,
+			Bank:    input.Bank,
+		},
+	)
+
+	if err != nil {
+		log.Errorf("[Payment Service-Owner VA-4] failed to charge VA: %v", err)
+		return nil, err
+	}
+
+	expiredAt := time.Now().Add(24 * time.Minute)
+
+	_, err = p.transactionRepo.CreateTransaction(
+		enum.ScopeOwner,
+		nil,
+		nil,
+		input.OrderID,
+		input.Amount,
+		model.PaymentTypeBankTransfer,
+		mtRes.VANumber,
+		&expiredAt,
+	)
+
+	if err != nil {
+		log.Errorf("[Payment Service-Owner VA-5] failed to create transaction: %v", err)
+		return nil, err
+	}
+
+	result := &GenerateVAResult{
+		OrderID:   input.OrderID,
+		VaNumber:  mtRes.VANumber,
+		Bank:      mtRes.Bank,
+		ExpiredAt: &expiredAt,
+		Status:    enum.TransactionStatusPending,
+	}
+
+	return result, nil
 }
 
 // GenerateOwnerQRIS implements [PaymentServiceInterface].

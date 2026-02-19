@@ -1,5 +1,6 @@
 package model
 
 const (
-	PaymentTypeQRIS = "QRIS"
+	PaymentTypeQRIS         = "QRIS"
+	PaymentTypeBankTransfer = "BANK_TRANSFER"
 )
