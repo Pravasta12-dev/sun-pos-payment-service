@@ -11,6 +11,7 @@ func RegisterRoutes(
 	paymentHandler handler.PaymentHandlerInterface,
 	webhookHandler handler.MitransWebhookHandlerInterface,
 	transactionHandler handler.TransactionHandlerInterface,
+	paymentChannelHandler handler.PaymentChannelHandlerInterface,
 ) {
 	api := e.Group("/api")
 	payment := api.Group("/payment")
@@ -24,6 +25,7 @@ func RegisterRoutes(
 	owner.POST("/generate-qris", paymentHandler.GenerateOwnerQris)
 	owner.POST("/generate-va", paymentHandler.GenerateOwnerVA)
 	owner.GET("/transaction/:bill_id", transactionHandler.GetByOwnerOrderID)
+	owner.GET("/channels", paymentChannelHandler.GetChannels)
 
 	e.GET("/ping", func(c echo.Context) error {
 		return c.String(200, "pong")

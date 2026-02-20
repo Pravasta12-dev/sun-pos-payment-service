@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"sun-pos-payment-service/config"
+	"sun-pos-payment-service/database/seeds"
 	"sun-pos-payment-service/internal/adapter/handler"
 	"sun-pos-payment-service/internal/adapter/payment"
 	"sun-pos-payment-service/internal/adapter/repository"
@@ -38,8 +39,11 @@ func RunServer() {
 		return
 	}
 
+	seeds.SeedPaymentChannels(db.DB)
+
 	transactionRepository := repository.NewTransactionRepository(db.DB)
 	merchantRepository := repository.NewMerchantRepository(db.DB, encryptor)
+	paymentChannelRepo := repository.NewPaymentChannelRepository(db.DB)
 
 	transactionService := service.NewTransactionService(transactionRepository)
 	midtransClient := payment.NewMidtransClient(cfg.Midtrans.BaseURL)
@@ -49,6 +53,7 @@ func RunServer() {
 		merchantRepository,
 		cfg.Midtrans.ServerKey,
 	)
+	paymentChannelService := service.NewPaymentChannelService(paymentChannelRepo)
 
 	e := echo.New()
 
@@ -66,6 +71,7 @@ func RunServer() {
 		cfg.Midtrans.ServerKey,
 	)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
+	paymentChannelHandler := handler.NewPaymentChannelHandler(paymentChannelService)
 
 	// // seed
 	// seeds.SeedMerchants(db.DB)
@@ -75,6 +81,7 @@ func RunServer() {
 		paymentHandler,
 		webhookHandler,
 		transactionHandler,
+		paymentChannelHandler,
 	)
 
 	go func() {
