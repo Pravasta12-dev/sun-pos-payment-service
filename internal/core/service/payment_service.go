@@ -61,7 +61,7 @@ func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateV
 		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, enum.TransactionStatusFailed, nil)
 	}
 
-	paymentOrderID := fmt.Sprintf("VA-OWNER-%s-%d", input.BillID, time.Now().UnixNano())
+	paymentOrderID := fmt.Sprintf("VA-OWNER-%s", input.BillID)
 
 	mtRes, err := p.midtransClient.ChargeVa(
 		p.ownerServerKey,
@@ -143,7 +143,7 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, enum.TransactionStatusFailed, nil)
 	}
 
-	paymentOrderID := fmt.Sprintf("QRIS-OWNER-%s-%d", input.BillID, time.Now().UnixNano())
+	paymentOrderID := fmt.Sprintf("QRIS-OWNER-%s", input.BillID)
 
 	expMinutes := input.ExpireMinutes
 	if expMinutes <= 0 {
