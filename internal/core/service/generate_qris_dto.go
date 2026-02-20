@@ -23,14 +23,14 @@ type GenerateQRISResult struct {
 }
 
 type GenerateOwnerQRISInput struct {
-	OrderID       string
 	Amount        float64
 	Acquirer      string
+	BillID        string // Represent for original purchase id
 	ExpireMinutes int
 }
 
 type GenerateOwnerVAInput struct {
-	OrderID       string
+	BillID        string
 	Amount        float64
 	Bank          string
 	ExpireMinutes int
@@ -39,6 +39,7 @@ type GenerateOwnerVAInput struct {
 type GenerateVAResult struct {
 	OrderID   string
 	VaNumber  string
+	BillID    string
 	Bank      string
 	ExpiredAt *time.Time
 	Status    enum.TransactionStatus

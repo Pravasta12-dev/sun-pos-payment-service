@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"sun-pos-payment-service/internal/adapter/dto/request"
 	"sun-pos-payment-service/internal/adapter/dto/response"
@@ -44,9 +45,9 @@ func (p *paymentHandler) GenerateOwnerVA(c echo.Context) error {
 
 	result, err := p.paymentService.GenerateOwnerVA(
 		service.GenerateOwnerVAInput{
-			OrderID: req.OrderID,
-			Amount:  req.Amount,
-			Bank:    req.Bank,
+			BillID: req.BillID,
+			Amount: req.Amount,
+			Bank:   req.Bank,
 		},
 	)
 
@@ -66,6 +67,7 @@ func (p *paymentHandler) GenerateOwnerVA(c echo.Context) error {
 		OrderID:    result.OrderID,
 		VaNumber:   result.VaNumber,
 		Bank:       result.Bank,
+		BillID:     result.BillID,
 		Status:     result.Status,
 		ExipiredAt: result.ExpiredAt,
 	}
@@ -101,7 +103,7 @@ func (p *paymentHandler) GenerateOwnerQris(c echo.Context) error {
 
 	result, err := p.paymentService.GenerateOwnerQRIS(
 		service.GenerateOwnerQRISInput{
-			OrderID:       request.OrderID,
+			BillID:        request.BillID,
 			Amount:        request.Amount,
 			Acquirer:      request.Acquirer,
 			ExpireMinutes: request.ExpireMinutes,
@@ -121,10 +123,13 @@ func (p *paymentHandler) GenerateOwnerQris(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, defaultResponse)
 	}
 
+	fmt.Printf("[Payment Handler-Owner] GenerateOwnerQRIS Result: %+v\n", result)
+
 	defaultResponse.Message = "QRIS generated successfully"
 	defaultResponse.Data = response.GenerateQrisResponse{
 		OrderID:   result.OrderID,
 		QrUrl:     result.QrURL,
+		BillID:    result.BillID,
 		ExpiredAt: result.ExpiredAt,
 		Status:    result.Status,
 	}

@@ -9,7 +9,7 @@ type GenerateQrisRequest struct {
 }
 
 type GenerateOwnerQrisRequest struct {
-	OrderID       string  `json:"order_id"`
+	BillID        string  `json:"bill_id"`
 	Amount        float64 `json:"amount"`
 	Acquirer      string  `json:"acquirer"`
 	ExpireMinutes int     `json:"expire_minutes"`

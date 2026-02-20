@@ -68,6 +68,8 @@ func (m *midtransClient) ChargeVa(serverKey string, input domain.VaChargeInput) 
 
 	defer resp.Body.Close()
 
+	fmt.Println("[MidtransClient] Response Data : ", resp)
+
 	if resp.StatusCode >= 300 {
 		log.Errorf("[MidtransClient-4] received non-2xx response: %d", resp.StatusCode)
 		return nil, fmt.Errorf("midtrans returned status code: %d", resp.StatusCode)
@@ -119,7 +121,9 @@ func (m *midtransClient) ChargeQris(
 
 	reqBody.TransactionDetails.OrderID = input.OrderID
 	reqBody.TransactionDetails.GrossAmount = input.Amount
-	reqBody.Qris.Acquirer = input.Acquirer
+	reqBody.Qris = &request.Qris{
+		Acquirer: input.Acquirer,
+	}
 
 	payload, err := json.Marshal(reqBody)
 	if err != nil {

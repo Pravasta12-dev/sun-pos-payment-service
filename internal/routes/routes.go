@@ -23,7 +23,7 @@ func RegisterRoutes(
 	owner := payment.Group("/owner")
 	owner.POST("/generate-qris", paymentHandler.GenerateOwnerQris)
 	owner.POST("/generate-va", paymentHandler.GenerateOwnerVA)
-	owner.GET("/transaction/:order_id", transactionHandler.GetByOwnerOrderID)
+	owner.GET("/transaction/:bill_id", transactionHandler.GetByOwnerOrderID)
 
 	e.GET("/ping", func(c echo.Context) error {
 		return c.String(200, "pong")

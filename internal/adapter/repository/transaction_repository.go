@@ -30,11 +30,84 @@ type TransactionRepositoryInterface interface {
 	) error
 	FindByOrderID(orderID string) (*model.TransactionModel, error)
 	FindByBillID(merchantID, billID string) (*model.TransactionModel, error)
+	FindJustByBillID(billID string) (*model.TransactionModel, error)
 	FindActivePendingTransaction(merchantID string, billID string, paymentType string) (*model.TransactionModel, error)
+	FindActivePendingTransactionByBillID(billID string) (*model.TransactionModel, error)
 }
 
 type transactionRepository struct {
 	db *gorm.DB
+}
+
+// FindJustByBillID implements [TransactionRepositoryInterface].
+func (t *transactionRepository) FindJustByBillID(billID string) (*model.TransactionModel, error) {
+	var e entity.TransactionEntity
+
+	err := t.db.Where("bill_id = ?", billID).Order("created_at DESC").Limit(1).First(&e).Error
+
+	fmt.Printf("[TransactionRepository] Querying transaction by bill ID: %s\n", billID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = errors.New("404")
+			log.Infof("[TransactionRepository-1] transaction not found by bill ID: %v", err)
+			return nil, err
+		}
+
+		log.Errorf("[TransactionRepository-2] failed to find transaction by bill ID: %v", err)
+		return nil, err
+	}
+
+	fmt.Printf("[TransactionRepository] Found transaction by bill ID: %+v\n", e)
+
+	transactionModel := &model.TransactionModel{
+		ID:               e.ID,
+		MerchantID:       e.MerchantID,
+		OrderID:          e.OrderID,
+		BillID:           e.BillID,
+		Amount:           e.Amount,
+		PaymentType:      e.PaymentType,
+		Status:           e.Status,
+		PaidAt:           e.PaidAt,
+		ExpiredAt:        e.ExpiredAt,
+		TransactionScope: e.TransactionScope,
+	}
+
+	return transactionModel, nil
+}
+
+// FindActivePendingTransactionByBillID implements [TransactionRepositoryInterface].
+func (t *transactionRepository) FindActivePendingTransactionByBillID(billID string) (*model.TransactionModel, error) {
+	var e entity.TransactionEntity
+
+	err := t.db.Where("bill_id = ? AND status = ? AND (expired_at IS NULL OR expired_at > NOW())",
+		billID, string(enum.TransactionStatusPending)).Order("created_at DESC").Limit(1).First(&e).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = errors.New("404")
+			log.Infof("[TransactionRepository-3] active pending transaction not found by bill ID: %v", err)
+			return nil, err
+		}
+
+		log.Errorf("[TransactionRepository-4] failed to find active pending transaction by bill ID: %v", err)
+		return nil, err
+	}
+
+	fmt.Printf("[TransactionRepository] Found active pending transaction by bill ID: %+v\n", e)
+
+	transactionModel := &model.TransactionModel{
+		ID:          e.ID,
+		MerchantID:  e.MerchantID,
+		OrderID:     e.OrderID,
+		BillID:      e.BillID,
+		Amount:      e.Amount,
+		PaymentType: e.PaymentType,
+		QrURL:       e.QrURL,
+		Status:      e.Status,
+		PaidAt:      e.PaidAt,
+		ExpiredAt:   e.ExpiredAt,
+	}
+
+	return transactionModel, nil
 }
 
 // FindByBillID implements [TransactionRepositoryInterface].
@@ -85,6 +158,8 @@ func (t *transactionRepository) FindActivePendingTransaction(merchantID string, 
 		log.Errorf("[TransactionRepository-2] failed to find active pending transaction: %v", err)
 		return nil, err
 	}
+
+	fmt.Printf("[TransactionRepository] Found active pending transaction: %+v\n", e)
 
 	transactionModel := &model.TransactionModel{
 		ID:          e.ID,

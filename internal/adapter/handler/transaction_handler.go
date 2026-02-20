@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"sun-pos-payment-service/internal/adapter/dto/response"
 	"sun-pos-payment-service/internal/core/service"
@@ -21,7 +22,7 @@ type transactionHandler struct {
 // GetByOwnerOrderID implements [TransactionHandlerInterface].
 func (t *transactionHandler) GetByOwnerOrderID(c echo.Context) error {
 	var (
-		req         string = c.Param("order_id")
+		req         string = c.Param("bill_id")
 		defaultResp response.DefaultResponse
 		dataResp    response.TransactionResponse
 	)
@@ -32,7 +33,7 @@ func (t *transactionHandler) GetByOwnerOrderID(c echo.Context) error {
 		return c.JSON(http.StatusUnprocessableEntity, defaultResp)
 	}
 
-	tx, err := t.transactionService.GetByOrderID(req)
+	tx, err := t.transactionService.GetJustByBillID(req)
 	if err != nil {
 		if err.Error() == "404" {
 			defaultResp.Message = "transaction not found"
@@ -43,6 +44,12 @@ func (t *transactionHandler) GetByOwnerOrderID(c echo.Context) error {
 		defaultResp.Data = nil
 		return c.JSON(http.StatusInternalServerError, defaultResp)
 	}
+
+	fmt.Println("[TransactionHandler] Transaction Scope:", tx.TransactionScope)
+	fmt.Println("[TransactionHandler] Transaction Bill ID:", tx.BillID)
+	fmt.Println("[TransactionHandler] Transaction Order ID:", tx.OrderID)
+	fmt.Println("[TransactionHandler] Transaction Payment Type:", tx.PaymentType)
+	fmt.Println("[TransactionHandler] Transaction Status:", tx.Status)
 
 	if tx.TransactionScope != enum.ScopeOwner {
 		defaultResp.Message = "transaction not found"

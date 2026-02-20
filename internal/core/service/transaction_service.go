@@ -25,10 +25,23 @@ type TransactionServiceInterface interface {
 	MarkAsFailed(orderID string) error
 	GetByOrderID(orderID string) (*model.TransactionModel, error)
 	GetByBillID(merchantID string, billID string) (*model.TransactionModel, error)
+	GetJustByBillID(billID string) (*model.TransactionModel, error)
 }
 
 type transactionService struct {
 	transactionRepo repository.TransactionRepositoryInterface
+}
+
+// GetJustByBillID implements [TransactionServiceInterface].
+func (t *transactionService) GetJustByBillID(billID string) (*model.TransactionModel, error) {
+	tx, err := t.transactionRepo.FindJustByBillID(billID)
+
+	if err != nil {
+		log.Errorf("[TransactionService-6] failed to get transaction by bill ID: %v", err)
+		return nil, err
+	}
+
+	return tx, nil
 }
 
 // GetByBillID implements [TransactionServiceInterface].

@@ -27,9 +27,9 @@ type paymentService struct {
 
 // GenerateOwnerVA implements [PaymentServiceInterface].
 func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateVAResult, error) {
-	if input.OrderID == "" || input.Amount <= 0 {
-		log.Errorf("[Payment Service-Owner VA-1] invalid order ID or amount")
-		return nil, errors.New("invalid order ID or amount")
+	if input.BillID == "" || input.Amount <= 0 {
+		log.Errorf("[Payment Service-Owner VA-1] invalid bill ID or amount")
+		return nil, errors.New("invalid bill ID or amount")
 	}
 
 	if p.ownerServerKey == "" {
@@ -37,16 +37,36 @@ func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateV
 		return nil, errors.New("owner server key is not configured")
 	}
 
-	_, err := p.transactionRepo.FindByOrderID(input.OrderID)
+	existingTransaction, err := p.transactionRepo.FindActivePendingTransactionByBillID(input.BillID)
 	if err != nil && err.Error() != "404" {
 		log.Errorf("[Payment Service-Owner VA-3] failed to find existing transaction: %v", err)
 		return nil, err
 	}
 
+	if err == nil && existingTransaction != nil {
+		if existingTransaction.ExpiredAt != nil && existingTransaction.ExpiredAt.After(time.Now()) {
+			log.Infof("[Payment Service-Owner VA-3] reusing existing pending transaction for bill ID: %s", existingTransaction.BillID)
+
+			return &GenerateVAResult{
+				OrderID:   existingTransaction.OrderID,
+				VaNumber:  *existingTransaction.QrURL,
+				BillID:    existingTransaction.BillID,
+				Bank:      "", // Bank info is not stored in transaction, so we can't return it here
+				ExpiredAt: existingTransaction.ExpiredAt,
+				Status:    existingTransaction.Status,
+			}, nil
+		}
+
+		log.Infof("[Payment Service-Owner VA-3] existing pending transaction found but expired, creating new transaction")
+		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, enum.TransactionStatusFailed, nil)
+	}
+
+	paymentOrderID := fmt.Sprintf("VA-OWNER-%s-%d", input.BillID, time.Now().UnixNano())
+
 	mtRes, err := p.midtransClient.ChargeVa(
 		p.ownerServerKey,
 		payment.VaChargeInput{
-			OrderID: input.OrderID,
+			OrderID: paymentOrderID,
 			Amount:  input.Amount,
 			Bank:    input.Bank,
 		},
@@ -62,8 +82,8 @@ func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateV
 	_, err = p.transactionRepo.CreateTransaction(
 		enum.ScopeOwner,
 		nil,
-		nil,
-		input.OrderID,
+		&input.BillID,
+		paymentOrderID,
 		input.Amount,
 		model.PaymentTypeBankTransfer,
 		mtRes.VANumber,
@@ -76,8 +96,9 @@ func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateV
 	}
 
 	result := &GenerateVAResult{
-		OrderID:   input.OrderID,
+		OrderID:   paymentOrderID,
 		VaNumber:  mtRes.VANumber,
+		BillID:    input.BillID,
 		Bank:      mtRes.Bank,
 		ExpiredAt: &expiredAt,
 		Status:    enum.TransactionStatusPending,
@@ -88,7 +109,7 @@ func (p *paymentService) GenerateOwnerVA(input GenerateOwnerVAInput) (*GenerateV
 
 // GenerateOwnerQRIS implements [PaymentServiceInterface].
 func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*GenerateQRISResult, error) {
-	if input.OrderID == "" || input.Amount <= 0 {
+	if input.BillID == "" || input.Amount <= 0 {
 		log.Errorf("[Payment Service-Owner-1] invalid order ID or amount")
 		return nil, errors.New("invalid order ID or amount")
 	}
@@ -98,24 +119,31 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 		return nil, errors.New("owner server key is not configured")
 	}
 
-	existingTransaction, err := p.transactionRepo.FindByOrderID(input.OrderID)
+	existingTransaction, err := p.transactionRepo.FindActivePendingTransactionByBillID(input.BillID)
 
 	if err != nil && err.Error() != "404" {
 		log.Errorf("[Payment Service-Owner-3] failed to find existing transaction: %v", err)
 		return nil, err
 	}
 
-	if existingTransaction != nil &&
-		existingTransaction.Status == enum.TransactionStatusPending &&
-		existingTransaction.ExpiredAt != nil &&
-		existingTransaction.ExpiredAt.After(time.Now()) {
-		return &GenerateQRISResult{
-			OrderID:   existingTransaction.OrderID,
-			QrURL:     *existingTransaction.QrURL,
-			ExpiredAt: existingTransaction.ExpiredAt,
-			Status:    existingTransaction.Status,
-		}, nil
+	if err == nil && existingTransaction != nil {
+		if existingTransaction.ExpiredAt != nil && existingTransaction.ExpiredAt.After(time.Now()) {
+			log.Infof("[Payment Service-Owner-3] reusing existing pending transaction for bill ID: %s", existingTransaction.BillID)
+
+			return &GenerateQRISResult{
+				OrderID:   existingTransaction.OrderID,
+				QrURL:     *existingTransaction.QrURL,
+				ExpiredAt: existingTransaction.ExpiredAt,
+				Status:    existingTransaction.Status,
+				BillID:    existingTransaction.BillID,
+			}, nil
+		}
+
+		log.Infof("[Payment Service-Owner-3] existing pending transaction found but expired, creating new transaction")
+		_ = p.transactionRepo.UpdateStatus(existingTransaction.OrderID, enum.TransactionStatusFailed, nil)
 	}
+
+	paymentOrderID := fmt.Sprintf("QRIS-OWNER-%s-%d", input.BillID, time.Now().UnixNano())
 
 	expMinutes := input.ExpireMinutes
 	if expMinutes <= 0 {
@@ -125,7 +153,7 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	mtRes, err := p.midtransClient.ChargeQris(
 		p.ownerServerKey,
 		payment.QrisChargeInput{
-			OrderID:  input.OrderID,
+			OrderID:  paymentOrderID,
 			Amount:   input.Amount,
 			Acquirer: input.Acquirer,
 		},
@@ -145,8 +173,8 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	_, err = p.transactionRepo.CreateTransaction(
 		enum.ScopeOwner,
 		nil,
-		nil,
-		input.OrderID,
+		&input.BillID,
+		paymentOrderID,
 		input.Amount,
 		model.PaymentTypeQRIS,
 		mtRes.QrURL,
@@ -159,8 +187,9 @@ func (p *paymentService) GenerateOwnerQRIS(input GenerateOwnerQRISInput) (*Gener
 	}
 
 	result := &GenerateQRISResult{
-		OrderID:   input.OrderID,
+		OrderID:   paymentOrderID,
 		QrURL:     mtRes.QrURL,
+		BillID:    input.BillID,
 		ExpiredAt: expiredAt,
 		Status:    enum.TransactionStatusPending,
 	}
@@ -218,6 +247,8 @@ func (p *paymentService) GenerateQRIS(
 		input.BillID,
 		model.PaymentTypeQRIS,
 	)
+
+	fmt.Printf("[Payment Service] Existing active pending transaction: %+v, error: %v\n", existingTransaction, err)
 
 	if err == nil && existingTransaction != nil {
 		if existingTransaction.Amount == input.Amount {
